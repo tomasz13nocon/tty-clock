@@ -40,17 +40,17 @@ init(void)
 
      /* Init ncurses */
      if (ttyclock->tty) {
-	     FILE *ftty = fopen(ttyclock->tty, "r+");
-	     if (!ftty) {
-		     fprintf(stderr, "tty-clock: error: '%s' couldn't be opened: %s.\n",
-				     ttyclock->tty, strerror(errno));
-		     exit(EXIT_FAILURE);
-	     }
-	     ttyclock->ttyscr = newterm(NULL, ftty, ftty);
-	     assert(ttyclock->ttyscr != NULL);
-	     set_term(ttyclock->ttyscr);
+         FILE *ftty = fopen(ttyclock->tty, "r+");
+         if (!ftty) {
+             fprintf(stderr, "tty-clock: error: '%s' couldn't be opened: %s.\n",
+                     ttyclock->tty, strerror(errno));
+             exit(EXIT_FAILURE);
+         }
+         ttyclock->ttyscr = newterm(NULL, ftty, ftty);
+         assert(ttyclock->ttyscr != NULL);
+         set_term(ttyclock->ttyscr);
      } else
-	     initscr();
+         initscr();
 
      cbreak();
      noecho();
@@ -165,15 +165,15 @@ signal_handler(int signal)
 void
 cleanup(void)
 {
-	if (ttyclock->ttyscr)
-		delscreen(ttyclock->ttyscr);
+    if (ttyclock->ttyscr)
+        delscreen(ttyclock->ttyscr);
 
-	if (ttyclock && ttyclock->tty)
-		free(ttyclock->tty);
-	if (ttyclock && ttyclock->option.format)
-		free(ttyclock->option.format);
-	if (ttyclock)
-		free(ttyclock);
+    if (ttyclock && ttyclock->tty)
+        free(ttyclock->tty);
+    if (ttyclock && ttyclock->option.format)
+        free(ttyclock->option.format);
+    if (ttyclock)
+        free(ttyclock);
 }
 
 void
@@ -250,21 +250,25 @@ draw_number(int n, int x, int y)
 void
 draw_clock(void)
 {
+     /* x and y origin - top left corner of the clock */
+     int xo = ttyclock->option.concise && !ttyclock->option.box ? 0 : 1;
+     int yo = ttyclock->option.concise && !ttyclock->option.box ? 0 : 1;
+
      /* Draw hour numbers */
-     draw_number(ttyclock->date.hour[0], 1, 1);
-     draw_number(ttyclock->date.hour[1], 1, 8);
+     draw_number(ttyclock->date.hour[0], yo, xo);
+     draw_number(ttyclock->date.hour[1], yo, xo + 7);
      chtype dotcolor = COLOR_PAIR(1);
      if (ttyclock->option.blink && time(NULL) % 2 == 0)
           dotcolor = COLOR_PAIR(2);
 
      /* 2 dot for number separation */
      wbkgdset(ttyclock->framewin, dotcolor);
-     mvwaddstr(ttyclock->framewin, 2, 16, "  ");
-     mvwaddstr(ttyclock->framewin, 4, 16, "  ");
+     mvwaddstr(ttyclock->framewin, yo + 1, xo + 15, "  ");
+     mvwaddstr(ttyclock->framewin, yo + 3, xo + 15, "  ");
 
      /* Draw minute numbers */
-     draw_number(ttyclock->date.minute[0], 1, 20);
-     draw_number(ttyclock->date.minute[1], 1, 27);
+     draw_number(ttyclock->date.minute[0], yo, xo + 19);
+     draw_number(ttyclock->date.minute[1], yo, xo + 26);
 
      /* Draw the date */
      if (ttyclock->option.bold)
@@ -275,7 +279,7 @@ draw_clock(void)
      if (ttyclock->option.date)
      {
           wbkgdset(ttyclock->datewin, (COLOR_PAIR(2)));
-          mvwprintw(ttyclock->datewin, (DATEWINH / 2), 1, ttyclock->date.datestr);
+          mvwprintw(ttyclock->datewin, yo + (DATEWINH / 2) - 1, xo, ttyclock->date.datestr);
           wrefresh(ttyclock->datewin);
      }
 
@@ -284,12 +288,12 @@ draw_clock(void)
      {
           /* Again 2 dot for number separation */
           wbkgdset(ttyclock->framewin, dotcolor);
-          mvwaddstr(ttyclock->framewin, 2, NORMFRAMEW, "  ");
-          mvwaddstr(ttyclock->framewin, 4, NORMFRAMEW, "  ");
+          mvwaddstr(ttyclock->framewin, yo + 1, xo + NORMFRAMEW - 1, "  ");
+          mvwaddstr(ttyclock->framewin, yo + 3, xo + NORMFRAMEW - 1, "  ");
 
           /* Draw second numbers */
-          draw_number(ttyclock->date.second[0], 1, 39);
-          draw_number(ttyclock->date.second[1], 1, 46);
+          draw_number(ttyclock->date.second[0], yo, xo + 38);
+          draw_number(ttyclock->date.second[1], yo, xo + 45);
      }
 
      return;
@@ -400,6 +404,9 @@ set_box(Bool b)
 {
      ttyclock->option.box = b;
 
+     if (ttyclock->option.concise)
+          clock_move(ttyclock->geo.x, ttyclock->geo.y, ttyclock->geo.w, ttyclock->geo.h);
+
      wbkgdset(ttyclock->framewin, COLOR_PAIR(0));
      wbkgdset(ttyclock->datewin, COLOR_PAIR(0));
 
@@ -416,6 +423,15 @@ set_box(Bool b)
 
      wrefresh(ttyclock->datewin);
      wrefresh(ttyclock->framewin);
+}
+
+void
+set_concise(Bool b)
+{
+     ttyclock->option.concise = b;
+     clock_move(ttyclock->geo.x, ttyclock->geo.y, ttyclock->geo.w, ttyclock->geo.h);
+
+     return;
 }
 
 void
@@ -484,7 +500,7 @@ key_event(void)
      case 'q':
      case 'Q':
           if (ttyclock->option.noquit == False)
-		  ttyclock->running = False;
+          ttyclock->running = False;
           break;
 
      case 's':
@@ -520,6 +536,11 @@ key_event(void)
      case 'x':
      case 'X':
           set_box(!ttyclock->option.box);
+          break;
+
+     case 'm':
+     case 'M':
+          set_concise(!ttyclock->option.concise);
           break;
 
      default:
@@ -562,7 +583,7 @@ main(int argc, char **argv)
 
      atexit(cleanup);
 
-     while ((c = getopt(argc, argv, "iuvsScbtrhBxnDC:f:d:T:a:")) != -1)
+     while ((c = getopt(argc, argv, "miuvsScbtrhBxnDC:f:d:T:a:")) != -1)
      {
           switch(c)
           {
@@ -577,18 +598,22 @@ main(int argc, char **argv)
                       "    -b            Use bold colors                                \n"
                       "    -t            Set the hour in 12h format                     \n"
                       "    -u            Use UTC time                                   \n"
-		      "    -T tty        Display the clock on the specified terminal    \n"
+                      "    -T tty        Display the clock on the specified terminal    \n"
                       "    -r            Do rebound the clock                           \n"
                       "    -f format     Set the date format                            \n"
-		      "    -n            Don't quit on keypress                         \n"
+                      "    -n            Don't quit on keypress                         \n"
                       "    -v            Show tty-clock version                         \n"
                       "    -i            Show some info about tty-clock                 \n"
                       "    -h            Show this page                                 \n"
                       "    -D            Hide date                                      \n"
                       "    -B            Enable blinking colon                          \n"
                       "    -d delay      Set the delay between two redraws of the clock. Default 1s. \n"
-                      "    -a nsdelay    Additional delay between two redraws in nanoseconds. Default 0ns.\n");
+                      "    -a nsdelay    Additional delay between two redraws in nanoseconds. Default 0ns.\n"
+                      "    -m            Display clock as close to top left corner as possible.\n");
                exit(EXIT_SUCCESS);
+               break;
+          case 'm':
+               ttyclock->option.concise = True;
                break;
           case 'i':
                puts("TTY-Clock 2 © by Martin Duquesnoy (xorg62@gmail.com), Grey (grey@greytheory.net)");
@@ -643,25 +668,25 @@ main(int argc, char **argv)
           case 'x':
                ttyclock->option.box = True;
                break;
-	  case 'T': {
-	       struct stat sbuf;
-	       if (stat(optarg, &sbuf) == -1) {
-		       fprintf(stderr, "tty-clock: error: couldn't stat '%s': %s.\n",
-				       optarg, strerror(errno));
-		       exit(EXIT_FAILURE);
-	       } else if (!S_ISCHR(sbuf.st_mode)) {
-		       fprintf(stderr, "tty-clock: error: '%s' doesn't appear to be a character device.\n",
-				       optarg);
-		       exit(EXIT_FAILURE);
-	       } else {
-	       		if (ttyclock->tty)
-				free(ttyclock->tty);
-			ttyclock->tty = strdup(optarg);
-	       }}
-	       break;
-	  case 'n':
-	       ttyclock->option.noquit = True;
-	       break;
+          case 'T': {
+               struct stat sbuf;
+               if (stat(optarg, &sbuf) == -1) {
+                   fprintf(stderr, "tty-clock: error: couldn't stat '%s': %s.\n",
+                           optarg, strerror(errno));
+                   exit(EXIT_FAILURE);
+               } else if (!S_ISCHR(sbuf.st_mode)) {
+                   fprintf(stderr, "tty-clock: error: '%s' doesn't appear to be a character device.\n",
+                           optarg);
+                   exit(EXIT_FAILURE);
+               } else {
+                    if (ttyclock->tty)
+                    free(ttyclock->tty);
+                ttyclock->tty = strdup(optarg);
+               }}
+               break;
+          case 'n':
+               ttyclock->option.noquit = True;
+               break;
           }
      }
 
